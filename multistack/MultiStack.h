@@ -13,6 +13,80 @@ protected:
 	TStack<T>* stacks;
 
 	void StackRelocation(int index);
+	int free_space()
+	{
+		int freeSize = 0;
+		for (int i = 0; i < StackCount; i++)
+			freeSize += stacks[i].GetSize() - stacks[i].GetCount();
+		return freeSize;
+	}
+	void move_left(int i, T** newData, int* sizes)
+	{
+		for (int j = 0; j < stacks[i].GetCount(); j++)
+			newData[i][j] = oldData[i][j];
+		stacks[i].SetData(newData[i], sizes[i], stacks[i].GetCount());
+	}
+	void move_right(int i, int k, T** newData, int* sizes)
+	{
+		for (k = i; k < StackCount; k++)
+			if (newData[k] > oldData[k])
+				continue;
+			else
+				break;
+		k--;
+
+		for (int s = k; s >= i; s--)
+		{
+			for (int j = stacks[s].GetCount() - 1; j >= 0; j--)
+				newData[s][j] = oldData[s][j];
+
+			stacks[s].SetData(newData[s], sizes[s], stacks[s].GetCount());
+		}
+	}
+
+	int* memalloc()
+	{
+		int to_add = floor((double)length / StackCount);
+
+		int* sizes = new int[StackCount];
+		for (int i = 0; i < StackCount - 1; i++)
+			sizes[i] = to_add;
+
+		sizes[StackCount - 1] = length - to_add * (StackCount - 1);
+		return sizes;
+	}
+
+	void move(int* sizes)
+	{
+		T** newData = new T * [StackCount];
+		int k = 0;
+		for (int i = 0; i < StackCount; i++)
+		{
+			newData[i] = &(data[k]);
+			k += sizes[i];
+		}
+
+		for (int i = 0; i < StackCount; i++)
+		{
+			if (newData[i] == oldData[i])
+				stacks[i].SetData(newData[i], sizes[i], stacks[i].GetCount());
+
+			else if (newData[i] < oldData[i])
+			{
+				move_left(i, newData, sizes);
+			}
+			else if (newData[i] > oldData[i])
+			{
+				move_right(i, k, newData, sizes);
+			}
+
+		}
+
+		T** buffer = oldData;
+		oldData = newData;
+		delete[] buffer;
+		delete[] sizes;
+	}
 
 public:
 	TMultiStack(int length = 1, int StackCount = 1);
@@ -23,6 +97,8 @@ public:
 
 	void Push(T d, int i);
 	T Pop(int i);
+
+	void realloc_two();
 
 	bool IsEmpty(int i) const;
 	bool IsFull(int i) const;
@@ -42,9 +118,7 @@ ostream& operator<<(ostream& ostr, const TMultiStack<T>& A)
 template<class T>
 inline void TMultiStack<T>::StackRelocation(int index)
 {
-	int freeSize = 0;
-	for (int i = 0; i < StackCount; i++)
-		freeSize += stacks[i].GetSize() - stacks[i].GetCount();
+	int freeSize = free_space();
 	
 	if (freeSize == 0)
 		throw logic_error("stack full");
@@ -57,48 +131,51 @@ inline void TMultiStack<T>::StackRelocation(int index)
 
 	sizes[StackCount - 1] = stacks[StackCount - 1].GetCount() + freeSize - to_add * (StackCount - 1);
 
-	T** newData = new T * [StackCount];
-	int k = 0;
-	for (int i = 0; i < StackCount; i++)
-	{
-		newData[i] = &(data[k]);
-		k += sizes[i];
-	}
+	move(sizes);
+}
+
+template<class T>
+inline void TMultiStack<T>::realloc_two()
+{
+	int max = 0, min = 0;
+	int temp1 = stacks[0].GetSize() - stacks[0].GetCount();
+	int temp2 = stacks[0].GetSize() - stacks[0].GetCount();
 
 	for (int i = 0; i < StackCount; i++)
 	{
-		if (newData[i] == oldData[i])
-			stacks[i].SetData(newData[i], sizes[i], stacks[i].GetCount());
-		else if (newData[i] < oldData[i])
+		if (stacks[i].GetSize() - stacks[i].GetCount() > temp1)
 		{
-			for (int j = 0; j < stacks[i].GetCount(); j++)
-				newData[i][j] = oldData[i][j];
-			stacks[i].SetData(newData[i], sizes[i], stacks[i].GetCount());
+			temp1 = stacks[i].GetSize() - stacks[i].GetCount();
+			max = i;
 		}
-		else if (newData[i] > oldData[i])
+		if (stacks[i].GetSize() - stacks[i].GetCount() < temp2)
 		{
-			for (k = i; k < StackCount; k++)
-				if (newData[k] > oldData[k])
-					continue;
-				else
-					break;
-			k--;
-
-			for (int s = k; s >= i; s--)
-			{
-				for (int j = stacks[s].GetCount() - 1; j >= 0; j--)
-					newData[s][j] = oldData[s][j];
-
-				stacks[s].SetData(newData[s], sizes[s], stacks[s].GetCount());
-			}
+			temp1 = stacks[i].GetSize() - stacks[i].GetCount();
+			min = i;
 		}
-
 	}
 
-	T** buffer = oldData;
-	oldData = newData;
-	delete[] buffer;
-	delete[] sizes;
+	if (max == min)
+		return;
+	else
+	{
+		int pool = temp1 + temp2;
+		temp1 = int(2.0 / 3 * pool);
+		temp2 = pool - temp1;
+		
+		int* sizes = new int[StackCount];
+		for (int i = 0; i < StackCount - 1; i++)
+		{
+			if (i == max)
+				sizes[i] = temp1;
+			else if (i == min)
+				sizes[i] = temp2;
+			else
+				sizes[i] = stacks[i].GetSize();
+		}
+
+		move(sizes);
+	}
 }
 
 template<class T>
@@ -114,13 +191,7 @@ TMultiStack<T>::TMultiStack(int length, int StackCount)
 	for (int i = 0; i < length; i++)
 		data[i] = 0;
 
-	int to_add = floor((double)length / StackCount);
-
-	int* sizes = new int[StackCount];
-	for (int i = 0; i < StackCount - 1; i++)
-		sizes[i] = to_add;
-
-	sizes[StackCount - 1] = length - to_add * (StackCount - 1);
+	int* sizes = memalloc();
 
 	oldData = new T * [StackCount];
 

@@ -83,3 +83,19 @@ TEST(multistack, cant_push_full)
 	ASSERT_ANY_THROW(B.Push(0, 0));
 }
 
+TEST(multistack, realloc_two_works)
+{
+	TMultiStack<int> stk(15, 3);
+
+	stk.Push(11, 0);
+	stk.Push(12, 0);
+	stk.Push(13, 0);
+	stk.Push(14, 0);
+
+	stk.Push(21, 1);
+	stk.Push(22, 1);
+
+	stk.Push(31, 2);
+
+	ASSERT_NO_THROW(stk.realloc_two());
+}
